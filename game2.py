@@ -23,6 +23,14 @@ map_graph = {
     'Patna': {'Kolkata': 6, 'Lucknow': 8}
 }
 
+# global dictionary for items & shelf life
+ITEM_SHELF_LIFE = {
+    "Milk": 50,
+    "Fruits": 70,
+    "Medicines": 90
+}
+
+
 class Vehicle:
     def __init__(self, item, quantity, shelf_life):
         self.item = item
@@ -108,40 +116,65 @@ class LogisticsGameGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Perishable Goods Logistics Optimizer")
+        self.root.configure(bg="#f0f4f8")  # Light bluish background
 
-        self.input_frame = tk.Frame(root)
+        # Center the window on the screen
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'+{x}+{y}')
+
+        title = tk.Label(root, text="🚚 Perishable Goods Logistics Optimizer", font=("Helvetica", 18, "bold"), bg="#f0f4f8", fg="#2c3e50")
+        title.pack(pady=20)
+
+        self.input_frame = tk.Frame(root, bg="#f0f4f8", padx=20, pady=10)
         self.input_frame.pack()
 
-        tk.Label(self.input_frame, text="Source:").grid(row=0, column=0)
-        tk.Label(self.input_frame, text="Destination:").grid(row=1, column=0)
-        tk.Label(self.input_frame, text="Item:").grid(row=2, column=0)
-        tk.Label(self.input_frame, text="Quantity:").grid(row=3, column=0)
+        label_style = {"font": ("Helvetica", 12), "bg": "#f0f4f8"}
+
+        tk.Label(self.input_frame, text="Source:", **label_style).grid(row=0, column=0, sticky="e", pady=5)
+        tk.Label(self.input_frame, text="Destination:", **label_style).grid(row=1, column=0, sticky="e", pady=5)
+        tk.Label(self.input_frame, text="Choose Goods:", **label_style).grid(row=2, column=0, sticky="e", pady=5)
+        tk.Label(self.input_frame, text="Difficulty:", **label_style).grid(row=3, column=0, sticky="e", pady=5)
+
+        self.difficulty = tk.StringVar()
+        self.difficulty.set("Medium")  # default level
+        difficulty_options = ["Easy", "Medium", "Hard"]
+        tk.OptionMenu(self.input_frame, self.difficulty, *difficulty_options).grid(row=3, column=1)
+
+        self.selected_item = tk.StringVar()
+        self.selected_item.set("Milk")  # default
+        item_options = list(ITEM_SHELF_LIFE.keys())
+        self.item_dropdown = tk.OptionMenu(self.input_frame, self.selected_item, *item_options)
+        self.item_dropdown.grid(row=2, column=1)
 
         self.source_entry = tk.Entry(self.input_frame)
         self.destination_entry = tk.Entry(self.input_frame)
-        self.item_entry = tk.Entry(self.input_frame)
-        self.quantity_entry = tk.Entry(self.input_frame)
+        # self.item_entry = tk.Entry(self.input_frame)
 
         self.source_entry.grid(row=0, column=1)
         self.destination_entry.grid(row=1, column=1)
-        self.item_entry.grid(row=2, column=1)
-        self.quantity_entry.grid(row=3, column=1)
+        # self.item_entry.grid(row=2, column=1)
+        
 
-        self.start_btn = tk.Button(self.input_frame, text="Start Game", command=self.start_game)
-        self.start_btn.grid(row=4, columnspan=2)
+        btn_style = {"bg": "#3498db", "fg": "white", "font": ("Helvetica", 10, "bold"), "padx": 10, "pady": 5}
 
-        self.info_label = tk.Label(root, text="", font=("Helvetica", 12))
+        self.start_btn = tk.Button(self.input_frame, text="Start Game", command=self.start_game, **btn_style)
+        self.start_btn.grid(row=4, columnspan=2, pady=10)
+
+        self.disrupt_btn = tk.Button(root, text="Introduce Disruption", command=self.introduce_disruption, state='disabled', **btn_style)
+        self.disrupt_btn.pack(pady=5)
+
+        self.next_btn = tk.Button(root, text="Next Move", command=self.next_move, state='disabled', **btn_style)
+        self.next_btn.pack(pady=5)
+
+        self.map_btn = tk.Button(root, text="Show Map", command=self.show_map, **btn_style)
+        self.map_btn.pack(pady=5)
+
+        self.info_label = tk.Label(self.root, text="", font=("Helvetica", 12), bg="#f0f4f8", justify="left")
         self.info_label.pack(pady=10)
-
-        self.disrupt_btn = tk.Button(root, text="Introduce Disruption", command=self.introduce_disruption, state='disabled')
-        self.disrupt_btn.pack()
-
-        self.next_btn = tk.Button(root, text="Next Move", command=self.next_move, state='disabled')
-        self.next_btn.pack()
-
-        self.map_btn = tk.Button(root, text="Show Map", command=self.show_map)
-        self.map_btn.pack()
-
 
         self.reset()
 
@@ -203,8 +236,8 @@ class LogisticsGameGUI:
     def start_game(self):
         src = self.source_entry.get().strip().title()
         dst = self.destination_entry.get().strip().title()
-        item = self.item_entry.get().strip()
-        quantity = int(self.quantity_entry.get().strip())
+        item = self.selected_item.get()
+        shelf_life = ITEM_SHELF_LIFE[item]
 
         if src not in map_graph or dst not in map_graph:
             messagebox.showerror("Invalid Input", "Invalid Source or Destination")
@@ -215,7 +248,7 @@ class LogisticsGameGUI:
             messagebox.showerror("No Route", "No valid path found.")
             return
 
-        self.vehicle = Vehicle(item, quantity, shelf_life=100)
+        self.vehicle = Vehicle(item, quantity=None, shelf_life=shelf_life)
         self.vehicle.position = src
         self.path = path
         self.route = path[1:]
@@ -229,7 +262,12 @@ class LogisticsGameGUI:
     def apply_disruption(self, popup, node1, node2, disruption_type):
         popup.destroy()
 
-        delay = 15 if disruption_type.lower() == 'weather' else 30
+        level = self.difficulty.get().lower()
+
+        if disruption_type.lower() == 'weather':
+            delay = {'easy': 10, 'medium': 15, 'hard': 20}[level]
+        else:
+            delay = {'easy': 20, 'medium': 30, 'hard': 40}[level]
 
         map_graph[node1][node2] += delay
         if node2 in map_graph and node1 in map_graph[node2]:
@@ -313,7 +351,23 @@ class LogisticsGameGUI:
     def update_info(self):
         truck_loc = self.state.current_node
         route_str = " -> ".join([truck_loc] + self.state.remaining_path)
-        status = f"Truck at: {truck_loc}\nRoute: {route_str}\nETA: {self.state.cost}\nShelf Life: {self.state.vehicle.shelf_life}\nDisruptions: {self.state.disruptions}"
+        # status = f"Truck at: {truck_loc}\nRoute: {route_str}\nETA: {self.state.cost}\nShelf Life: {self.state.vehicle.shelf_life}\nDisruptions: {self.state.disruptions}"
+        # Calculate ETA (sum of weights of remaining path from current_node)
+        eta = 0
+        current = truck_loc
+        for next_node in self.state.remaining_path:
+            eta += map_graph[current][next_node]
+            current = next_node
+
+        status = (
+            f"Truck at: {truck_loc}\n"
+            f"Route Status: {route_str}\n"
+            f"ETA: {eta}\n"
+            f"Elapsed Time: {self.state.cost}\n"
+            f"Shelf Life Left: {self.state.vehicle.shelf_life}\n"
+            f"Disruptions: {self.state.disruptions}"
+        )  
+
         self.info_label.config(text=status)
 
 # ---------------------------
