@@ -3,7 +3,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 import random
 
 # ---------------------------
@@ -144,30 +144,40 @@ class LogisticsGameGUI:
 
 
         self.reset()
+
     def show_map(self):
         G = nx.DiGraph()
+        disrupted = getattr(self, 'disrupted_edges', set())
 
-        # Add edges with weights
         for node in map_graph:
             for neighbor, weight in map_graph[node].items():
                 G.add_edge(node, neighbor, weight=weight)
 
-        pos = nx.spring_layout(G, seed=42)  # Consistent layout
+        pos = nx.spring_layout(G, seed=42)
         edge_labels = nx.get_edge_attributes(G, 'weight')
 
-        plt.figure(figsize=(8, 6))
-        nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=1000, font_weight='bold', arrows=True)
+        plt.figure(figsize=(10, 7))
+        nx.draw(G, pos, with_labels=True, node_color='lightblue',
+                node_size=1000, font_weight='bold', arrows=True)
+
+        # Highlight disrupted edges
+        disrupted_edges = [edge for edge in G.edges if edge in disrupted]
+        normal_edges = [edge for edge in G.edges if edge not in disrupted]
+
+        nx.draw_networkx_edges(G, pos, edgelist=normal_edges, edge_color='black')
+        nx.draw_networkx_edges(G, pos, edgelist=disrupted_edges, edge_color='red', width=2)
+
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
 
-        # Highlight source/destination
         if self.vehicle:
             src = self.path[0]
             dst = self.path[-1]
             nx.draw_networkx_nodes(G, pos, nodelist=[src], node_color='green')
             nx.draw_networkx_nodes(G, pos, nodelist=[dst], node_color='red')
 
-        plt.title("Map Representation of Route Network")
+        plt.title("Map Representation with Disruptions Highlighted")
         plt.show()
+
 
 
     def reset(self):
@@ -215,16 +225,58 @@ class LogisticsGameGUI:
         self.disrupt_btn.config(state='normal')
         self.next_btn.config(state='normal')
 
+    #Helper method for the introduced disruptions function
+    def apply_disruption(self, popup, node1, node2, disruption_type):
+        popup.destroy()
+
+        delay = 15 if disruption_type.lower() == 'weather' else 30
+
+        map_graph[node1][node2] += delay
+        if node2 in map_graph and node1 in map_graph[node2]:
+            map_graph[node2][node1] += delay
+
+        label = f"{disruption_type.title()} delay of {delay} at edge {node1}-{node2}"
+        self.state.disruptions.append(label)
+
+        # Save for map highlight
+        if not hasattr(self, 'disrupted_edges'):
+            self.disrupted_edges = set()
+        self.disrupted_edges.add((node1, node2))
+        self.disrupted_edges.add((node2, node1))  # Assume bi-directional for highlight
+
+        self.recalculate_best_route()
+        self.update_info()
+
+
     def introduce_disruption(self):
         if self.state.is_terminal():
             return
 
-        if self.state.remaining_path:
-            next_node = self.state.remaining_path[0]
-            map_graph[self.state.current_node][next_node] += 15  # Add delay
-            self.state.disruptions.append(f"Delay at {next_node}")
-            self.recalculate_best_route()  # 🔁 Recalculate best route after disruption
-            self.update_info()
+        edge_input = tk.simpledialog.askstring(
+            "Add Disruption",
+            "Enter edge (format: City1-City2), e.g. Delhi-Jaipur:"
+        )
+        if not edge_input or '-' not in edge_input:
+            messagebox.showerror("Invalid Format", "Use format City1-City2.")
+            return
+
+        node1, node2 = [c.strip().title() for c in edge_input.split('-')]
+        if node1 not in map_graph or node2 not in map_graph[node1]:
+            messagebox.showerror("Invalid Edge", f"{node1}-{node2} not found.")
+            return
+
+        # Dropdown popup for disruption type
+        type_popup = tk.Toplevel(self.root)
+        type_popup.title("Select Disruption Type")
+        tk.Label(type_popup, text="Choose Disruption Type:").pack(pady=5)
+
+        disruption_choice = tk.StringVar(value="Weather")
+
+        tk.OptionMenu(type_popup, disruption_choice, "Weather", "Traffic").pack(pady=5)
+        tk.Button(type_popup, text="Apply", command=lambda: self.apply_disruption(
+            type_popup, node1, node2, disruption_choice.get()
+        )).pack(pady=5)
+
 
 
     def next_move(self):
