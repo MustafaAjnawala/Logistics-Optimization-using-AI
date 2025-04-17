@@ -1,15 +1,9 @@
-# save this file as logistics_game.py and run with Python 3
 import networkx as nx
 import matplotlib.pyplot as plt
-
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-import random
 
-# ---------------------------
-# Graph and Heuristic
-# ---------------------------
-
+# Graph 
 map_graph = {
     'Delhi': {'Jaipur': 5, 'Lucknow': 6},
     'Jaipur': {'Delhi': 5, 'Ahmedabad': 8, 'Mumbai': 12},
@@ -22,6 +16,20 @@ map_graph = {
     'Kolkata': {'Chennai': 18, 'Lucknow': 15, 'Patna': 6},
     'Patna': {'Kolkata': 6, 'Lucknow': 8}
 }
+#coord according to India Map
+city_coords = {
+    'Delhi': (28.6667, 77.2167),
+    'Jaipur': (26.9221, 75.7789),
+    'Lucknow': (26.8500, 80.9499),
+    'Ahmedabad': (23.0339, 72.5850),
+    'Mumbai': (19.0761, 72.8775),
+    'Hyderabad': (17.3850, 78.4867),
+    'Bangalore': (12.9716, 77.5946),
+    'Chennai': (13.0827, 80.2707),
+    'Kolkata': (22.5726, 88.3639),
+    'Patna': (25.5941, 85.1376)
+}
+
 
 # global dictionary for items & shelf life
 ITEM_SHELF_LIFE = {
@@ -108,10 +116,7 @@ def minimax(state: GameState, depth, is_maximizing):
                 best_state = child
         return min_eval, best_state
 
-# ---------------------------
 # GUI
-# ---------------------------
-
 class LogisticsGameGUI:
     def __init__(self, root):
         self.root = root
@@ -158,7 +163,7 @@ class LogisticsGameGUI:
         self.destination_entry.grid(row=1, column=1)
         # self.item_entry.grid(row=2, column=1)
         
-
+        #all the buttons to be displayed on the GUI
         btn_style = {"bg": "#3498db", "fg": "white", "font": ("Helvetica", 10, "bold"), "padx": 10, "pady": 5}
 
         self.start_btn = tk.Button(self.input_frame, text="Start Game", command=self.start_game, **btn_style)
@@ -178,6 +183,21 @@ class LogisticsGameGUI:
 
         self.reset()
 
+    @staticmethod
+    def normalize_coords(coords):
+        lats = [lat for lat, lon in coords.values()]
+        lons = [lon for lat, lon in coords.values()]
+        min_lat, max_lat = min(lats), max(lats)
+        min_lon, max_lon = min(lons), max(lons)
+
+        norm_coords = {}
+        for city, (lat, lon) in coords.items():
+            x = (lon - min_lon) / (max_lon - min_lon)
+            y = (lat - min_lat) / (max_lat - min_lat)
+            norm_coords[city] = (x, y)
+        return norm_coords
+
+
     def show_map(self):
         G = nx.DiGraph()
         disrupted = getattr(self, 'disrupted_edges', set())
@@ -186,7 +206,7 @@ class LogisticsGameGUI:
             for neighbor, weight in map_graph[node].items():
                 G.add_edge(node, neighbor, weight=weight)
 
-        pos = nx.spring_layout(G, seed=42)
+        pos = self.normalize_coords(city_coords)
         edge_labels = nx.get_edge_attributes(G, 'weight')
 
         plt.figure(figsize=(10, 7))
@@ -212,7 +232,6 @@ class LogisticsGameGUI:
         plt.show()
 
 
-
     def reset(self):
         self.vehicle = None
         self.state = None
@@ -233,6 +252,7 @@ class LogisticsGameGUI:
                     queue.append((neighbor, path + [neighbor]))
         return []
 
+    #method to satrt the game
     def start_game(self):
         src = self.source_entry.get().strip().title()
         dst = self.destination_entry.get().strip().title()
@@ -316,7 +336,6 @@ class LogisticsGameGUI:
         )).pack(pady=5)
 
 
-
     def next_move(self):
         if self.state.is_terminal():
             result = "Delivered Successfully!" if self.state.delivered else "Goods Spoiled!"
@@ -342,6 +361,7 @@ class LogisticsGameGUI:
                 best_score = score
                 best_path = p
 
+        #if suggested path and the new path are not equal
         if best_path and best_path != [self.state.current_node] + self.state.remaining_path:
             self.route = best_path[1:]
             self.path = best_path
@@ -351,7 +371,6 @@ class LogisticsGameGUI:
     def update_info(self):
         truck_loc = self.state.current_node
         route_str = " -> ".join([truck_loc] + self.state.remaining_path)
-        # status = f"Truck at: {truck_loc}\nRoute: {route_str}\nETA: {self.state.cost}\nShelf Life: {self.state.vehicle.shelf_life}\nDisruptions: {self.state.disruptions}"
         # Calculate ETA (sum of weights of remaining path from current_node)
         eta = 0
         current = truck_loc
@@ -360,7 +379,7 @@ class LogisticsGameGUI:
             current = next_node
 
         status = (
-            f"Truck at: {truck_loc}\n"
+            f"Truck Currently at: {truck_loc}\n"
             f"Route Status: {route_str}\n"
             f"ETA: {eta}\n"
             f"Elapsed Time: {self.state.cost}\n"
@@ -370,10 +389,7 @@ class LogisticsGameGUI:
 
         self.info_label.config(text=status)
 
-# ---------------------------
-# Launch App
-# ---------------------------
-
+# Main function
 if __name__ == "__main__":
     root = tk.Tk()
     app = LogisticsGameGUI(root)
